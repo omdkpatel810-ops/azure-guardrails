@@ -1,0 +1,69 @@
+# Offline checks on every push and pull request. Nothing here needs an Azure account.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  policies:
+    name: Policy rules (Python)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -r requirements-dev.txt
+      - run: ruff check .
+      - run: ruff format --check .
+      - run: shellcheck bootstrap/bootstrap.sh
+      - run: pytest --cov --cov-fail-under=100
+
+  terraform:
+    name: Terraform (${{ matrix.dir }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        dir: [platform, bootstrap, modules/management-groups, modules/policy]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.17.1"
+      - run: terraform fmt -check -recursive -diff
+        working-directory: ${{ matrix.dir }}
+      - run: terraform init -backend=false -input=false
+        working-directory: ${{ matrix.dir }}
+      - run: terraform validate
+        working-directory: ${{ matrix.dir }}
+      - name: terraform test (mocked providers)
+        run: terraform test
+        working-directory: ${{ matrix.dir }}
+
+  lint:
+    name: tflint and Checkov
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: terraform-linters/setup-tflint@v4
+        with:
+          tflint_version: v0.59.1
+      - run: tflint --init
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+      - run: |
+          for dir in platform bootstrap modules/management-groups modules/policy; do
+            echo "::group::$dir"
+            tflint --chdir="$dir" --config="$PWD/.tflint.hcl"
+            echo "::endgroup::"
+          done
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -r requirements-dev.txt
+      - run: checkov --directory . --framework terraform github_actions --compact --quiet

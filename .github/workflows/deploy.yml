@@ -1,0 +1,110 @@
+# Plan on pull requests, apply on main, and check nightly that Azure still matches the code.
+#
+# Signs in to Azure with OpenID Connect: GitHub issues a short-lived token for this run, and
+# Entra ID trusts it only for the subjects bootstrap/ set up. There are no secrets to leak.
+# Every job is skipped until bootstrap/bootstrap.sh has set the repository variables.
+name: Deploy
+
+on:
+  pull_request:
+    paths: ["platform/**", "modules/**", "policies/**", ".github/workflows/deploy.yml"]
+  push:
+    branches: [main]
+    paths: ["platform/**", "modules/**", "policies/**", ".github/workflows/deploy.yml"]
+  schedule:
+    - cron: "17 9 * * *" # 09:17 UTC, early morning in Winnipeg
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-platform
+  cancel-in-progress: false # never interrupt an apply
+
+env:
+  ARM_USE_OIDC: "true"
+  ARM_USE_AZUREAD: "true"
+  ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+  ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+  TF_VAR_subscription_placement: ${{ vars.SUBSCRIPTION_PLACEMENT }}
+
+jobs:
+  plan:
+    name: Plan
+    if: vars.AZURE_PLAN_CLIENT_ID != '' && github.event_name != 'push'
+    runs-on: ubuntu-latest
+    env:
+      ARM_CLIENT_ID: ${{ vars.AZURE_PLAN_CLIENT_ID }}
+    defaults:
+      run:
+        working-directory: platform
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.17.1"
+          terraform_wrapper: false
+      - name: terraform init
+        run: >
+          terraform init
+          -backend-config="resource_group_name=${{ vars.TFSTATE_RESOURCE_GROUP }}"
+          -backend-config="storage_account_name=${{ vars.TFSTATE_STORAGE_ACCOUNT }}"
+          -backend-config="container_name=${{ vars.TFSTATE_CONTAINER }}"
+      - name: terraform plan
+        id: plan
+        # The plan identity can only read, so it plans without taking the state lock.
+        run: |
+          set +e
+          terraform plan -lock=false -detailed-exitcode -out=tfplan > plan.log 2>&1
+          code=$?
+          cat plan.log
+          echo "exitcode=$code" >> "$GITHUB_OUTPUT"
+          [ "$code" -eq 1 ] && exit 1 || exit 0
+      - name: Summary
+        run: |
+          {
+            echo "## Terraform plan"
+            echo
+            case "${{ steps.plan.outputs.exitcode }}" in
+              0) echo "No changes: Azure matches the code." ;;
+              2) echo "Changes to apply:" ;;
+            esac
+            echo
+            echo '```'
+            terraform show -no-color tfplan | grep -E '^\s*[#~+-]|Plan:' | head -200
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Fail the nightly check on drift
+        if: github.event_name == 'schedule' && steps.plan.outputs.exitcode == '2'
+        run: |
+          echo "::error::Azure no longer matches the code. Someone changed policy or management groups outside a pull request; see the plan above."
+          exit 1
+
+  apply:
+    name: Apply
+    if: vars.AZURE_APPLY_CLIENT_ID != '' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      ARM_CLIENT_ID: ${{ vars.AZURE_APPLY_CLIENT_ID }}
+    defaults:
+      run:
+        working-directory: platform
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.17.1"
+          terraform_wrapper: false
+      - name: terraform init
+        run: >
+          terraform init
+          -backend-config="resource_group_name=${{ vars.TFSTATE_RESOURCE_GROUP }}"
+          -backend-config="storage_account_name=${{ vars.TFSTATE_STORAGE_ACCOUNT }}"
+          -backend-config="container_name=${{ vars.TFSTATE_CONTAINER }}"
+      - run: terraform plan -out=tfplan
+      - run: terraform apply tfplan
