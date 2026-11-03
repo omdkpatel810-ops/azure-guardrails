@@ -1,0 +1,42 @@
+{
+  "name": "guardrails-inherit-rg-tag",
+  "properties": {
+    "displayName": "Guardrails: resources inherit a tag from their resource group",
+    "description": "Copies the given tag from the resource group to any resource that is missing it, so costs can be grouped by owner and cost centre without tagging every resource by hand.",
+    "mode": "Indexed",
+    "metadata": { "category": "Tags", "version": "1.0.0" },
+    "parameters": {
+      "tagName": {
+        "type": "String",
+        "metadata": { "displayName": "Tag name" }
+      },
+      "effect": {
+        "type": "String",
+        "metadata": { "displayName": "Effect" },
+        "allowedValues": ["Modify", "Disabled"],
+        "defaultValue": "Modify"
+      }
+    },
+    "policyRule": {
+      "if": {
+        "allOf": [
+          { "field": "[concat('tags[', parameters('tagName'), ']')]", "exists": "false" },
+          { "value": "[resourceGroup().tags[parameters('tagName')]]", "notEquals": "" }
+        ]
+      },
+      "then": {
+        "effect": "[parameters('effect')]",
+        "details": {
+          "roleDefinitionIds": ["/providers/Microsoft.Authorization/roleDefinitions/4a9ae827-6dc8-4573-8ac7-8239d42aa03f"],
+          "operations": [
+            {
+              "operation": "add",
+              "field": "[concat('tags[', parameters('tagName'), ']')]",
+              "value": "[resourceGroup().tags[parameters('tagName')]]"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

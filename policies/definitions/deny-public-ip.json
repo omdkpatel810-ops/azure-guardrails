@@ -1,0 +1,21 @@
+{
+  "name": "guardrails-no-public-ips",
+  "properties": {
+    "displayName": "Guardrails: no public IP addresses",
+    "description": "Denies public IP addresses. Assigned to the corp landing zone, where apps are internal and reached only through the private network.",
+    "mode": "Indexed",
+    "metadata": { "category": "Network", "version": "1.0.0" },
+    "parameters": {
+      "effect": {
+        "type": "String",
+        "metadata": { "displayName": "Effect" },
+        "allowedValues": ["Deny", "Audit", "Disabled"],
+        "defaultValue": "Deny"
+      }
+    },
+    "policyRule": {
+      "if": { "field": "type", "equals": "Microsoft.Network/publicIPAddresses" },
+      "then": { "effect": "[parameters('effect')]" }
+    }
+  }
+}

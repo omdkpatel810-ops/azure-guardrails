@@ -1,0 +1,37 @@
+{
+  "name": "guardrails-data-residency",
+  "displayName": "Guardrails: data residency",
+  "description": "Keeps resources and resource groups in the allowed regions.",
+  "metadata": { "category": "General", "version": "1.0.0" },
+  "parameters": {
+    "allowedLocations": {
+      "type": "Array",
+      "metadata": { "displayName": "Allowed locations", "strongType": "location" },
+      "defaultValue": ["canadacentral", "canadaeast"]
+    },
+    "effect": {
+      "type": "String",
+      "metadata": { "displayName": "Effect" },
+      "allowedValues": ["Deny", "Audit", "Disabled"],
+      "defaultValue": "Deny"
+    }
+  },
+  "policies": [
+    {
+      "referenceId": "resources-in-allowed-regions",
+      "definition": "allowed-locations",
+      "parameters": {
+        "allowedLocations": { "value": "[parameters('allowedLocations')]" },
+        "effect": { "value": "[parameters('effect')]" }
+      }
+    },
+    {
+      "referenceId": "resource-groups-in-allowed-regions",
+      "definition": "allowed-resource-group-locations",
+      "parameters": {
+        "allowedLocations": { "value": "[parameters('allowedLocations')]" },
+        "effect": { "value": "[parameters('effect')]" }
+      }
+    }
+  ]
+}

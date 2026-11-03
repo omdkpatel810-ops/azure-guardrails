@@ -1,0 +1,70 @@
+[
+  {
+    "name": "gr-locations",
+    "scope": "root",
+    "policy": "initiative:data-residency",
+    "displayName": "Data residency: allowed regions only",
+    "description": "Everything under Guardrails stays in the allowed regions.",
+    "parameters": {
+      "effect": "Deny"
+    },
+    "nonComplianceMessage": "Resources here must be in an allowed region (Canada Central or Canada East by default). Ask the platform team for an exemption if a service isn't offered there."
+  },
+  {
+    "name": "gr-baseline",
+    "scope": "platform",
+    "policy": "initiative:baseline",
+    "displayName": "Baseline: tags and storage rules",
+    "description": "Shared platform resources follow the baseline.",
+    "parameters": {
+      "denyEffect": "Deny",
+      "modifyEffect": "Modify"
+    },
+    "nonComplianceMessage": "Resource groups need owner, cost-center and environment tags, and storage accounts must block public blob access and use HTTPS with TLS 1.2 or newer."
+  },
+  {
+    "name": "gr-baseline",
+    "scope": "landing-zones",
+    "policy": "initiative:baseline",
+    "displayName": "Baseline: tags and storage rules",
+    "description": "Application landing zones follow the baseline.",
+    "parameters": {
+      "denyEffect": "Deny",
+      "modifyEffect": "Modify"
+    },
+    "nonComplianceMessage": "Resource groups need owner, cost-center and environment tags, and storage accounts must block public blob access and use HTTPS with TLS 1.2 or newer."
+  },
+  {
+    "name": "gr-baseline-audit",
+    "scope": "sandbox",
+    "policy": "initiative:baseline",
+    "displayName": "Baseline, audit only: tags and storage rules",
+    "description": "Sandboxes report baseline breaks without blocking experiments.",
+    "parameters": {
+      "denyEffect": "Audit",
+      "modifyEffect": "Modify"
+    }
+  },
+  {
+    "name": "gr-no-public-ip",
+    "scope": "corp",
+    "policy": "definition:deny-public-ip",
+    "displayName": "Corp: no public IP addresses",
+    "description": "Corp apps are internal and reached only over the private network.",
+    "parameters": {
+      "effect": "Deny"
+    },
+    "nonComplianceMessage": "Public IP addresses aren't allowed in the corp landing zone. Use the online landing zone for internet-facing apps."
+  },
+  {
+    "name": "gr-decommissioned",
+    "scope": "decommissioned",
+    "policy": "definition:deny-new-resources",
+    "displayName": "Decommissioned: clean-up only",
+    "description": "Retired subscriptions can only be cleaned up.",
+    "parameters": {
+      "effect": "Deny"
+    },
+    "nonComplianceMessage": "This subscription is decommissioned: you can delete resources but not create or change them."
+  }
+]

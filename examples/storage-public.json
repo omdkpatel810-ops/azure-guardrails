@@ -1,0 +1,7 @@
+{
+  "type": "Microsoft.Storage/storageAccounts",
+  "name": "stpaymentsexports",
+  "location": "canadacentral",
+  "tags": {},
+  "properties": { "allowBlobPublicAccess": true, "supportsHttpsTrafficOnly": true, "minimumTlsVersion": "TLS1_0" }
+}

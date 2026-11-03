@@ -1,0 +1,14 @@
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+tfplan
+plan.log
+crash.log
+bootstrap/backend_override.tf
+bootstrap/backend_override.tf.next
+modules/**/.terraform.lock.hcl
+__pycache__/
+.pytest_cache/
+.coverage
+.ruff_cache/

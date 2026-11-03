@@ -1,0 +1,6 @@
+{
+  "type": "Microsoft.Resources/subscriptions/resourceGroups",
+  "name": "rg-payments-dev",
+  "location": "canadacentral",
+  "tags": { "owner": "payments-team@example.com", "cost-center": "cc-2040", "environment": "dev" }
+}

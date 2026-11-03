@@ -1,0 +1,126 @@
+{
+  "name": "guardrails-baseline",
+  "displayName": "Guardrails: baseline",
+  "description": "Every resource group has an owner, a cost centre and an environment; resources inherit those tags; storage is never public and always encrypted in transit.",
+  "metadata": {
+    "category": "General",
+    "version": "1.0.0"
+  },
+  "parameters": {
+    "denyEffect": {
+      "type": "String",
+      "metadata": {
+        "displayName": "Effect for the deny rules"
+      },
+      "allowedValues": [
+        "Deny",
+        "Audit",
+        "Disabled"
+      ],
+      "defaultValue": "Deny"
+    },
+    "modifyEffect": {
+      "type": "String",
+      "metadata": {
+        "displayName": "Effect for the tag inheritance rules"
+      },
+      "allowedValues": [
+        "Modify",
+        "Disabled"
+      ],
+      "defaultValue": "Modify"
+    }
+  },
+  "policies": [
+    {
+      "referenceId": "rg-needs-owner",
+      "definition": "require-resource-group-tag",
+      "parameters": {
+        "tagName": {
+          "value": "owner"
+        },
+        "effect": {
+          "value": "[parameters('denyEffect')]"
+        }
+      }
+    },
+    {
+      "referenceId": "rg-needs-cost-center",
+      "definition": "require-resource-group-tag",
+      "parameters": {
+        "tagName": {
+          "value": "cost-center"
+        },
+        "effect": {
+          "value": "[parameters('denyEffect')]"
+        }
+      }
+    },
+    {
+      "referenceId": "rg-needs-environment",
+      "definition": "require-resource-group-tag",
+      "parameters": {
+        "tagName": {
+          "value": "environment"
+        },
+        "effect": {
+          "value": "[parameters('denyEffect')]"
+        }
+      }
+    },
+    {
+      "referenceId": "inherit-owner",
+      "definition": "inherit-resource-group-tag",
+      "parameters": {
+        "tagName": {
+          "value": "owner"
+        },
+        "effect": {
+          "value": "[parameters('modifyEffect')]"
+        }
+      }
+    },
+    {
+      "referenceId": "inherit-cost-center",
+      "definition": "inherit-resource-group-tag",
+      "parameters": {
+        "tagName": {
+          "value": "cost-center"
+        },
+        "effect": {
+          "value": "[parameters('modifyEffect')]"
+        }
+      }
+    },
+    {
+      "referenceId": "inherit-environment",
+      "definition": "inherit-resource-group-tag",
+      "parameters": {
+        "tagName": {
+          "value": "environment"
+        },
+        "effect": {
+          "value": "[parameters('modifyEffect')]"
+        }
+      }
+    },
+    {
+      "referenceId": "no-public-blobs",
+      "definition": "deny-storage-public-access",
+      "parameters": {
+        "effect": {
+          "value": "[parameters('denyEffect')]"
+        }
+      }
+    },
+    {
+      "referenceId": "storage-https-tls12",
+      "definition": "require-storage-secure-transfer",
+      "parameters": {
+        "effect": {
+          "value": "[parameters('denyEffect')]"
+        }
+      }
+    }
+  ]
+}

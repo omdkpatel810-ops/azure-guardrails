@@ -1,0 +1,35 @@
+{
+  "name": "guardrails-require-rg-tag",
+  "properties": {
+    "displayName": "Guardrails: resource groups must have a tag",
+    "description": "Denies resource groups without a non-empty value for the given tag, so every resource group has an owner, a cost centre and an environment.",
+    "mode": "All",
+    "metadata": { "category": "Tags", "version": "1.0.0" },
+    "parameters": {
+      "tagName": {
+        "type": "String",
+        "metadata": { "displayName": "Tag name" }
+      },
+      "effect": {
+        "type": "String",
+        "metadata": { "displayName": "Effect" },
+        "allowedValues": ["Deny", "Audit", "Disabled"],
+        "defaultValue": "Deny"
+      }
+    },
+    "policyRule": {
+      "if": {
+        "allOf": [
+          { "field": "type", "equals": "Microsoft.Resources/subscriptions/resourceGroups" },
+          {
+            "anyOf": [
+              { "field": "[concat('tags[', parameters('tagName'), ']')]", "exists": "false" },
+              { "field": "[concat('tags[', parameters('tagName'), ']')]", "equals": "" }
+            ]
+          }
+        ]
+      },
+      "then": { "effect": "[parameters('effect')]" }
+    }
+  }
+}

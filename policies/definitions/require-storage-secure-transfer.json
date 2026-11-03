@@ -1,0 +1,31 @@
+{
+  "name": "guardrails-storage-tls",
+  "properties": {
+    "displayName": "Guardrails: storage accounts must use HTTPS and TLS 1.2 or newer",
+    "description": "Denies storage accounts that accept plain HTTP or TLS versions older than 1.2.",
+    "mode": "Indexed",
+    "metadata": { "category": "Storage", "version": "1.0.0" },
+    "parameters": {
+      "effect": {
+        "type": "String",
+        "metadata": { "displayName": "Effect" },
+        "allowedValues": ["Deny", "Audit", "Disabled"],
+        "defaultValue": "Deny"
+      }
+    },
+    "policyRule": {
+      "if": {
+        "allOf": [
+          { "field": "type", "equals": "Microsoft.Storage/storageAccounts" },
+          {
+            "anyOf": [
+              { "field": "Microsoft.Storage/storageAccounts/supportsHttpsTrafficOnly", "notEquals": "true" },
+              { "field": "Microsoft.Storage/storageAccounts/minimumTlsVersion", "notIn": ["TLS1_2", "TLS1_3"] }
+            ]
+          }
+        ]
+      },
+      "then": { "effect": "[parameters('effect')]" }
+    }
+  }
+}

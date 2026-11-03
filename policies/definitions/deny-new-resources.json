@@ -1,0 +1,21 @@
+{
+  "name": "guardrails-decommissioned",
+  "properties": {
+    "displayName": "Guardrails: nothing new in decommissioned subscriptions",
+    "description": "Denies creating or changing anything except locks, role assignments and policy, so a retired subscription can only be cleaned up. Deleting is still allowed.",
+    "mode": "All",
+    "metadata": { "category": "General", "version": "1.0.0" },
+    "parameters": {
+      "effect": {
+        "type": "String",
+        "metadata": { "displayName": "Effect" },
+        "allowedValues": ["Deny", "Audit", "Disabled"],
+        "defaultValue": "Deny"
+      }
+    },
+    "policyRule": {
+      "if": { "field": "type", "notLike": "Microsoft.Authorization/*" },
+      "then": { "effect": "[parameters('effect')]" }
+    }
+  }
+}

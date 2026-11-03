@@ -1,0 +1,32 @@
+{
+  "name": "guardrails-allowed-locations",
+  "properties": {
+    "displayName": "Guardrails: resources only in allowed regions",
+    "description": "Denies resources outside the allowed regions (Canada Central and Canada East by default), so data stays in Canada. Global resources are exempt.",
+    "mode": "Indexed",
+    "metadata": { "category": "General", "version": "1.0.0" },
+    "parameters": {
+      "allowedLocations": {
+        "type": "Array",
+        "metadata": { "displayName": "Allowed locations", "strongType": "location" },
+        "defaultValue": ["canadacentral", "canadaeast"]
+      },
+      "effect": {
+        "type": "String",
+        "metadata": { "displayName": "Effect" },
+        "allowedValues": ["Deny", "Audit", "Disabled"],
+        "defaultValue": "Deny"
+      }
+    },
+    "policyRule": {
+      "if": {
+        "allOf": [
+          { "field": "location", "notIn": "[parameters('allowedLocations')]" },
+          { "field": "location", "notEquals": "global" },
+          { "field": "type", "notEquals": "Microsoft.AzureActiveDirectory/b2cDirectories" }
+        ]
+      },
+      "then": { "effect": "[parameters('effect')]" }
+    }
+  }
+}

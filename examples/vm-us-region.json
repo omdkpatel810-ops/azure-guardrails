@@ -1,0 +1,6 @@
+{
+  "type": "Microsoft.Compute/virtualMachines",
+  "name": "vm-cheap-test",
+  "location": "eastus",
+  "tags": { "owner": "dev@example.com", "cost-center": "cc-2040", "environment": "dev" }
+}

@@ -1,0 +1,6 @@
+{
+  "type": "Microsoft.Resources/subscriptions/resourceGroups",
+  "name": "rg-test-123",
+  "location": "canadacentral",
+  "tags": {}
+}

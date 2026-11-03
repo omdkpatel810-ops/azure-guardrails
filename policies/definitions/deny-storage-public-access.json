@@ -1,0 +1,26 @@
+{
+  "name": "guardrails-no-public-blobs",
+  "properties": {
+    "displayName": "Guardrails: storage accounts can't allow anonymous blob access",
+    "description": "Denies storage accounts that allow anonymous (public) read access to blobs, the setting behind most public data leaks from cloud storage.",
+    "mode": "Indexed",
+    "metadata": { "category": "Storage", "version": "1.0.0" },
+    "parameters": {
+      "effect": {
+        "type": "String",
+        "metadata": { "displayName": "Effect" },
+        "allowedValues": ["Deny", "Audit", "Disabled"],
+        "defaultValue": "Deny"
+      }
+    },
+    "policyRule": {
+      "if": {
+        "allOf": [
+          { "field": "type", "equals": "Microsoft.Storage/storageAccounts" },
+          { "field": "Microsoft.Storage/storageAccounts/allowBlobPublicAccess", "notEquals": "false" }
+        ]
+      },
+      "then": { "effect": "[parameters('effect')]" }
+    }
+  }
+}

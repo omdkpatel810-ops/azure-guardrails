@@ -1,0 +1,6 @@
+{
+  "type": "Microsoft.Compute/virtualMachines",
+  "name": "vm-payments-api-01",
+  "location": "canadacentral",
+  "tags": {}
+}
