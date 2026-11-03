@@ -1,0 +1,61 @@
+# Publish the Hugging Face Space after CI passes on main, so the Space always shows the rules
+# exactly as they are here. Idle until an HF_TOKEN secret (write access to the Space) is added.
+name: Hugging Face Space
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hugging-face-space
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    name: Publish the Space
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    env:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      SPACE: ${{ vars.HF_SPACE || 'Om1627/azure-guardrails' }}
+      SOURCE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+    steps:
+      - name: Waiting for a token
+        if: env.HF_TOKEN == ''
+        run: echo "::notice::Add an HF_TOKEN secret with write access to $SPACE to publish the Space."
+      - uses: actions/checkout@v5
+        if: env.HF_TOKEN != ''
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+      - uses: actions/setup-python@v6
+        if: env.HF_TOKEN != ''
+        with:
+          python-version: "3.13"
+      - name: Build the Space folder
+        if: env.HF_TOKEN != ''
+        run: python scripts/build_space.py build/space
+      - name: Upload
+        if: env.HF_TOKEN != ''
+        run: |
+          pip install huggingface_hub==2.4.0
+          python - <<'PY'
+          import os
+          from huggingface_hub import HfApi
+
+          sha = os.environ["SOURCE_SHA"][:7]
+          commit = HfApi(token=os.environ["HF_TOKEN"]).upload_folder(
+              repo_id=os.environ["SPACE"],
+              repo_type="space",
+              folder_path="build/space",
+              delete_patterns="*",  # drop files that no longer exist here (.gitattributes is kept)
+              commit_message=f"Sync from GitHub {sha}",
+          )
+          print(f"Published {commit.commit_url}")
+          PY
+          echo "### Space published: https://huggingface.co/spaces/$SPACE" >> "$GITHUB_STEP_SUMMARY"

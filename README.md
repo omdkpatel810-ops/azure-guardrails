@@ -5,7 +5,7 @@
 [![CI](https://github.com/omdkpatel810-ops/azure-guardrails/actions/workflows/ci.yml/badge.svg)](https://github.com/omdkpatel810-ops/azure-guardrails/actions/workflows/ci.yml)
 
 > **Status: milestone 1 of 4 is built and tested offline.** The management groups, the policies and the
-> pipeline are done: 22 Terraform tests run against mocked Azure providers, and 156 Python tests check
+> pipeline are done: 22 Terraform tests run against mocked Azure providers, and 187 Python tests check
 > the rules themselves. The first real deployment waits on the Azure subscription, and its measured
 > results will go here.
 
@@ -56,7 +56,11 @@ Python tests read the same files, so what's tested is what's deployed.
 
 ## Try the rules without Azure
 
-[`tools/policy_eval.py`](tools/policy_eval.py) is a small Azure Policy evaluator. Given a resource and a
+**In the browser:** the [Guardrails playground](https://huggingface.co/spaces/Om1627/azure-guardrails) on Hugging Face
+lets you pick a management group, edit a resource, and see what Azure Policy would do with it. A workflow
+publishes it from this repo every time CI passes on `main`, so it always runs the rules as they are here.
+
+**On the command line:** [`tools/policy_eval.py`](tools/policy_eval.py) is a small Azure Policy evaluator. Given a resource and a
 management group, it applies every assignment from the root down and says what Azure would do:
 
 ```console
@@ -111,9 +115,10 @@ deployment's measured results are the real test.
 
 | What | How | Count |
 |---|---|---|
-| Each rule against resources that should and shouldn't pass | pytest, via the evaluator | 156 Python tests, 100% coverage |
+| Each rule against resources that should and shouldn't pass | pytest, via the evaluator | 187 Python tests, 100% coverage |
 | The policy files: names, parameters, references, roles | pytest | (included above) |
 | `bootstrap.sh`: first run, re-run, region limits, GitHub fallbacks | pytest, with stand-in `az`, `terraform` and `gh` | (included above) |
+| The Hugging Face Space: every example, bad input, the page, the published folder | pytest, with Gradio | (included above) |
 | The hierarchy, assignments, identities, exemption rules | `terraform test` with mocked providers | 22 |
 | Formatting, validation, linting, security scanning | `terraform fmt` and `validate`, tflint, Checkov, ruff, shellcheck | every push |
 
@@ -189,5 +194,6 @@ platform/            the root configuration the pipeline applies
 bootstrap/           state storage, pipeline identities, and bootstrap.sh
 tools/policy_eval.py the offline policy evaluator
 examples/            sample resources for trying the rules
+space/               the Hugging Face Space (Gradio), built by scripts/build_space.py
 tests/               Python tests
 ```
