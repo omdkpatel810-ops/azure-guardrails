@@ -13,8 +13,8 @@ jobs:
     name: Policy rules (Python)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
       - run: pip install -r requirements-dev.txt
@@ -31,7 +31,7 @@ jobs:
       matrix:
         dir: [platform, bootstrap, modules/management-groups, modules/policy]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "1.17.1"
@@ -49,7 +49,7 @@ jobs:
     name: tflint and Checkov
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: terraform-linters/setup-tflint@v4
         with:
           tflint_version: v0.59.1
@@ -62,7 +62,7 @@ jobs:
             tflint --chdir="$dir" --config="$PWD/.tflint.hcl"
             echo "::endgroup::"
           done
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
       - run: pip install -r requirements-dev.txt
