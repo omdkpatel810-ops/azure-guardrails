@@ -54,6 +54,10 @@ mock_provider "azuread" {
   }
 }
 
+variables {
+  finops_email = "finance@example.com"
+}
+
 run "state_storage_follows_the_baseline" {
   command = apply
 
@@ -196,6 +200,44 @@ run "teams_have_groups_and_pipelines_can_only_read_them" {
   assert {
     condition     = toset(keys(azuread_app_role_assignment.read_groups)) == toset(["plan", "apply"]) && alltrue([for a in values(azuread_app_role_assignment.read_groups) : a.app_role_id == "00000000-0000-0000-0000-000000000777"])
     error_message = "Both pipeline identities get Group.Read.All in Microsoft Graph, and only that."
+  }
+}
+
+run "costs_are_exported_daily_and_watched" {
+  command = apply
+
+  assert {
+    condition = (
+      azurerm_subscription_cost_management_export.daily.recurrence_type == "Daily" &&
+      azurerm_subscription_cost_management_export.daily.export_data_options[0].type == "ActualCost" &&
+      azurerm_subscription_cost_management_export.daily.export_data_options[0].time_frame == "MonthToDate"
+    )
+    error_message = "This month's actual costs are exported every day."
+  }
+
+  assert {
+    condition     = azurerm_subscription_cost_management_export.daily.export_data_storage_location[0].container_id == azurerm_storage_container.costs.id
+    error_message = "Exports land in the cost-exports container."
+  }
+
+  assert {
+    condition     = !azurerm_storage_account.costs.allow_nested_items_to_be_public && azurerm_storage_account.costs.min_tls_version == "TLS1_2" && azurerm_storage_container.costs.container_access_type == "private"
+    error_message = "Cost data is never public."
+  }
+
+  assert {
+    condition     = azurerm_role_assignment.pipeline["plan-cost-exports"].role_definition_name == "Storage Blob Data Reader" && azurerm_role_assignment.pipeline["plan-cost-exports"].scope == azurerm_storage_container.costs.id
+    error_message = "The plan identity can read cost exports, and only read them."
+  }
+
+  assert {
+    condition     = toset(azurerm_cost_anomaly_alert.subscription.email_addresses) == toset(["finance@example.com"])
+    error_message = "Unusual spending is emailed to finops_email."
+  }
+
+  assert {
+    condition     = toset([for l in azurerm_monitor_diagnostic_setting.activity_log.enabled_log : l.category]) == toset(["Administrative", "Security", "Policy", "Alert", "Recommendation", "ServiceHealth", "ResourceHealth"])
+    error_message = "The activity log goes to the audit workspace."
   }
 }
 

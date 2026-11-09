@@ -41,3 +41,13 @@ variable "demo_teams" {
   type        = list(string)
   default     = ["payments", "storefront", "data", "support", "marketing", "finance"]
 }
+
+variable "finops_email" {
+  description = "Who gets cost anomaly emails."
+  type        = string
+
+  validation {
+    condition     = can(regex("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$", var.finops_email))
+    error_message = "Use an email address."
+  }
+}

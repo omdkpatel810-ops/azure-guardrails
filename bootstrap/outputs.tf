@@ -8,5 +8,7 @@ output "github_variables" {
     TFSTATE_RESOURCE_GROUP  = azurerm_resource_group.state.name
     TFSTATE_STORAGE_ACCOUNT = azurerm_storage_account.state.name
     TFSTATE_CONTAINER       = azurerm_storage_container.state.name
+    COST_EXPORT_ACCOUNT     = azurerm_storage_account.costs.name
+    COST_EXPORT_CONTAINER   = azurerm_storage_container.costs.name
   }
 }

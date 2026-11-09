@@ -210,6 +210,7 @@ locals {
     apply-state             = { who = "apply", role = "Storage Blob Data Contributor", scope = azurerm_storage_container.state.id }
     plan-read               = { who = "plan", role = "Reader", scope = data.azurerm_management_group.root.id }
     plan-state              = { who = "plan", role = "Storage Blob Data Reader", scope = azurerm_storage_container.state.id }
+    plan-cost-exports       = { who = "plan", role = "Storage Blob Data Reader", scope = azurerm_storage_container.costs.id }
   }
 }
 

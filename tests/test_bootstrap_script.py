@@ -33,6 +33,7 @@ case "$*" in
   "account show --query id -o tsv") [[ -n "$FAKE_SUB" ]] || exit 1; echo "$FAKE_SUB" ;;
   "account show --query tenantId -o tsv") echo tenant-id ;;
   "account show --query name -o tsv") echo "Azure for Students" ;;
+  "account show --query user.name -o tsv") echo "om@example.com" ;;
   "policy assignment list"*) printf '%s' "$FAKE_REGION_LIMITS" ;;
   "account management-group show"*) exit "$FAKE_MG_MISSING" ;;
   "storage blob exists"*) echo "$FAKE_BLOB_EXISTS" ;;
@@ -140,6 +141,7 @@ def test_a_first_run_creates_everything_in_order(run):
     migrate = find(calls, "-migrate-state")[0]
     assert "storage_account_name=stgrstate" in migrate and "key=bootstrap.tfstate" in migrate
     assert f'subscription_placement={{"{SUB}" = "online"}}' in find(calls, "-chdir=platform apply")[0]
+    assert "finops_email=om@example.com" in find(calls, "-chdir=bootstrap apply")[0]
     assert "/providers/Microsoft.Management/managementGroups/guardrails" in find(calls, "platform import")[0]
 
     # Bootstrap's state now lives in storage, so the local copy is gone and the override stays.
@@ -222,3 +224,10 @@ def test_it_refuses_an_unknown_placement(run):
 def test_it_stops_if_no_one_is_signed_in(run):
     result, _, _ = run(fake_sub="")
     assert result.returncode == 1
+
+
+def test_cost_alerts_can_go_to_someone_else(run):
+    result, calls, _ = run(finops_email="finance@example.com")
+    assert result.returncode == 0, result.stderr
+    assert "finops_email=finance@example.com" in find(calls, "-chdir=bootstrap apply")[0]
+    assert "Cost alerts:  finance@example.com" in result.stdout

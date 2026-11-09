@@ -43,8 +43,10 @@ done
 step "Checking the signed-in account"
 SUB=$(az account show --query id -o tsv) || fail "Sign in first: az login"
 TENANT=$(az account show --query tenantId -o tsv)
+FINOPS_EMAIL="${FINOPS_EMAIL:-$(az account show --query user.name -o tsv)}"
 echo "Subscription: $(az account show --query name -o tsv) ($SUB)"
 echo "Tenant:       $TENANT"
+echo "Cost alerts:  $FINOPS_EMAIL (set FINOPS_EMAIL to change)"
 export ARM_SUBSCRIPTION_ID="$SUB" ARM_TENANT_ID="$TENANT"
 
 step "Checking that $LOCATION is allowed"
@@ -79,7 +81,7 @@ BACKEND=(
   -backend-config="container_name=$CONTAINER"
   -backend-config="use_azuread_auth=true"
 )
-TFVARS=(-var "location=$LOCATION" -var "github_repository=$REPO" -var "root_management_group=$PREFIX")
+TFVARS=(-var "location=$LOCATION" -var "github_repository=$REPO" -var "root_management_group=$PREFIX" -var "finops_email=$FINOPS_EMAIL")
 printf 'terraform {\n  backend "azurerm" {}\n}\n' >bootstrap/backend_override.tf.next
 
 step "Applying bootstrap/ (state storage, audit log, pipeline identities)"
