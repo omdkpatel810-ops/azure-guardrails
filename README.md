@@ -24,7 +24,7 @@ A company of a few hundred people moves to Azure. Each team gets a subscription,
 Writing a wiki page about it doesn't help. Guardrails turns the rules into code that Azure enforces on every
 request, reviews every change to them in a pull request, and makes every exception expire.
 
-## What milestone 1 builds
+## Milestone 1: rules as code
 
 A management group hierarchy following Microsoft's Cloud Adoption Framework, with a policy at each level:
 
@@ -54,6 +54,44 @@ Each rule is a JSON file in [`policies/definitions`](policies/definitions), grou
 in [`policies/initiatives`](policies/initiatives), and assigned in
 [`policies/assignments.json`](policies/assignments.json). Terraform deploys exactly those files, and the
 Python tests read the same files, so what's tested is what's deployed.
+
+## Try the rules without Azure
+
+**In the browser:** the [Guardrails playground](https://huggingface.co/spaces/Om1627/azure-guardrails) on Hugging Face
+lets you pick a management group, edit a resource, and see what Azure Policy would do with it. A workflow
+publishes it from this repo every time CI passes on `main`, so it always runs the rules as they are here.
+
+**On the command line:** [`tools/policy_eval.py`](tools/policy_eval.py) is a small Azure Policy evaluator. Given a resource and a
+management group, it applies every assignment from the root down and says what Azure would do:
+
+```console
+$ python tools/policy_eval.py online examples/rg-untagged.json
+Deny     landing-zones/gr-baseline    require-resource-group-tag (rg-needs-owner)
+Deny     landing-zones/gr-baseline    require-resource-group-tag (rg-needs-cost-center)
+Deny     landing-zones/gr-baseline    require-resource-group-tag (rg-needs-environment)
+DENIED
+
+$ python tools/policy_eval.py sandbox examples/rg-untagged.json
+Audit    sandbox/gr-baseline-audit    require-resource-group-tag (rg-needs-owner)
+Audit    sandbox/gr-baseline-audit    require-resource-group-tag (rg-needs-cost-center)
+Audit    sandbox/gr-baseline-audit    require-resource-group-tag (rg-needs-environment)
+ALLOWED
+
+$ python tools/policy_eval.py online examples/vm-untagged.json --resource-group examples/rg-tagged.json
+Modify   landing-zones/gr-baseline    inherit-resource-group-tag (inherit-owner)
+Modify   landing-zones/gr-baseline    inherit-resource-group-tag (inherit-cost-center)
+Modify   landing-zones/gr-baseline    inherit-resource-group-tag (inherit-environment)
+tags after Modify: {"owner": "payments-team@example.com", "cost-center": "cc-2040", "environment": "dev"}
+ALLOWED
+
+$ python tools/policy_eval.py sandbox examples/vm-us-region.json
+Deny     root/gr-locations            allowed-locations (resources-in-allowed-regions)
+DENIED
+```
+
+It models the parts of Azure's behaviour these rules depend on: string comparisons ignore case, Indexed
+mode skips resource groups, and Modify runs before Deny and Audit. It is a model, though, not Azure: the
+deployment's measured results are the real test.
 
 ## Milestone 2: environments by pull request
 
@@ -165,44 +203,6 @@ including a drill that runs out of time.
 ## Results
 
 Pending the first deployment. Each drill adds its table here.
-
-## Try the rules without Azure
-
-**In the browser:** the [Guardrails playground](https://huggingface.co/spaces/Om1627/azure-guardrails) on Hugging Face
-lets you pick a management group, edit a resource, and see what Azure Policy would do with it. A workflow
-publishes it from this repo every time CI passes on `main`, so it always runs the rules as they are here.
-
-**On the command line:** [`tools/policy_eval.py`](tools/policy_eval.py) is a small Azure Policy evaluator. Given a resource and a
-management group, it applies every assignment from the root down and says what Azure would do:
-
-```console
-$ python tools/policy_eval.py online examples/rg-untagged.json
-Deny     landing-zones/gr-baseline    require-resource-group-tag (rg-needs-owner)
-Deny     landing-zones/gr-baseline    require-resource-group-tag (rg-needs-cost-center)
-Deny     landing-zones/gr-baseline    require-resource-group-tag (rg-needs-environment)
-DENIED
-
-$ python tools/policy_eval.py sandbox examples/rg-untagged.json
-Audit    sandbox/gr-baseline-audit    require-resource-group-tag (rg-needs-owner)
-Audit    sandbox/gr-baseline-audit    require-resource-group-tag (rg-needs-cost-center)
-Audit    sandbox/gr-baseline-audit    require-resource-group-tag (rg-needs-environment)
-ALLOWED
-
-$ python tools/policy_eval.py online examples/vm-untagged.json --resource-group examples/rg-tagged.json
-Modify   landing-zones/gr-baseline    inherit-resource-group-tag (inherit-owner)
-Modify   landing-zones/gr-baseline    inherit-resource-group-tag (inherit-cost-center)
-Modify   landing-zones/gr-baseline    inherit-resource-group-tag (inherit-environment)
-tags after Modify: {"owner": "payments-team@example.com", "cost-center": "cc-2040", "environment": "dev"}
-ALLOWED
-
-$ python tools/policy_eval.py sandbox examples/vm-us-region.json
-Deny     root/gr-locations            allowed-locations (resources-in-allowed-regions)
-DENIED
-```
-
-It models the parts of Azure's behaviour these rules depend on: string comparisons ignore case, Indexed
-mode skips resource groups, and Modify runs before Deny and Audit. It is a model, though, not Azure: the
-deployment's measured results are the real test.
 
 ## Security choices
 
