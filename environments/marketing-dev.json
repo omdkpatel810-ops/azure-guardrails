@@ -1,0 +1,16 @@
+{
+  "team": "marketing",
+  "environment": "dev",
+  "owner": "marketing-lead@example.com",
+  "cost_center": "cc-6100",
+  "region": "canadacentral",
+  "monthly_budget": 60,
+  "access": {
+    "contributors": [
+      "grp-guardrails-marketing"
+    ],
+    "readers": [
+      "grp-guardrails-finance"
+    ]
+  }
+}

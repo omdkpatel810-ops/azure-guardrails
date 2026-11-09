@@ -1,0 +1,15 @@
+{
+  "team": "support",
+  "environment": "test",
+  "owner": "support-lead@example.com",
+  "cost_center": "cc-5200",
+  "region": "canadacentral",
+  "monthly_budget": 80,
+  "access": {
+    "contributors": [
+      "grp-guardrails-support"
+    ],
+    "readers": []
+  },
+  "address_space": "10.100.5.0/25"
+}

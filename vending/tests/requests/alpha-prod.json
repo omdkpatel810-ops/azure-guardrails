@@ -1,0 +1,14 @@
+{
+  "team": "alpha",
+  "environment": "prod",
+  "owner": "alpha@example.com",
+  "cost_center": "cc-1000",
+  "monthly_budget": 900,
+  "access": {
+    "contributors": [],
+    "readers": [
+      "grp-alpha",
+      "grp-finance"
+    ]
+  }
+}

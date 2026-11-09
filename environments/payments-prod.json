@@ -1,0 +1,16 @@
+{
+  "team": "payments",
+  "environment": "prod",
+  "owner": "payments-lead@example.com",
+  "cost_center": "cc-2040",
+  "region": "canadacentral",
+  "monthly_budget": 1200,
+  "access": {
+    "contributors": [],
+    "readers": [
+      "grp-guardrails-payments",
+      "grp-guardrails-finance"
+    ]
+  },
+  "address_space": "10.100.2.0/24"
+}

@@ -1,0 +1,16 @@
+{
+  "team": "data",
+  "environment": "dev",
+  "owner": "data-lead@example.com",
+  "cost_center": "cc-4500",
+  "region": "canadacentral",
+  "monthly_budget": 300,
+  "access": {
+    "contributors": [
+      "grp-guardrails-data"
+    ],
+    "readers": [
+      "grp-guardrails-finance"
+    ]
+  }
+}

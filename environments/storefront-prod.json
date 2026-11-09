@@ -1,0 +1,16 @@
+{
+  "team": "storefront",
+  "environment": "prod",
+  "owner": "storefront-lead@example.com",
+  "cost_center": "cc-3110",
+  "region": "canadacentral",
+  "monthly_budget": 2500,
+  "access": {
+    "contributors": [],
+    "readers": [
+      "grp-guardrails-storefront",
+      "grp-guardrails-finance"
+    ]
+  },
+  "address_space": "10.100.4.0/24"
+}
