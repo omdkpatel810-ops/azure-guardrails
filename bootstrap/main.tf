@@ -165,11 +165,14 @@ resource "azuread_application_federated_identity_credential" "github" {
 
 locals {
   tag_contributor = "4a9ae827-6dc8-4573-8ac7-8239d42aa03f"
+  contributor     = "b24988ac-6180-42a0-ab88-20f7382dd24c"
+  reader          = "acdd72a7-3385-48ef-bd42-f606fba81ae7"
 
-  # The apply identity may create role assignments only for Tag Contributor, the role the
-  # tag-inheritance policies need, and only for service principals (the policies' identities).
-  # So even a compromised pipeline can't make anyone Owner.
-  only_tag_contributor = <<-EOT
+  # Which role assignments the apply identity may make: Tag Contributor for service principals
+  # (the policies' identities), and Contributor or Reader for groups (vended environments). So
+  # even a compromised pipeline can't make anyone Owner or hand out admin roles. A condition
+  # can't limit the scope, so these grants rely on apply running only from main, with approval.
+  assignable_roles = <<-EOT
     (
       (
         !(ActionMatches{'Microsoft.Authorization/roleAssignments/write'})
@@ -180,6 +183,12 @@ locals {
         AND
         @Request[Microsoft.Authorization/roleAssignments:PrincipalType] ForAnyOfAnyValues:StringEqualsIgnoreCase {'ServicePrincipal'}
       )
+      OR
+      (
+        @Request[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {${local.contributor}, ${local.reader}}
+        AND
+        @Request[Microsoft.Authorization/roleAssignments:PrincipalType] ForAnyOfAnyValues:StringEqualsIgnoreCase {'Group'}
+      )
     )
     AND
     (
@@ -188,7 +197,7 @@ locals {
       )
       OR
       (
-        @Resource[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {${local.tag_contributor}}
+        @Resource[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {${local.tag_contributor}, ${local.contributor}, ${local.reader}}
       )
     )
   EOT
@@ -196,10 +205,46 @@ locals {
   grants = {
     apply-management-groups = { who = "apply", role = "Management Group Contributor", scope = data.azurerm_management_group.root.id }
     apply-policy            = { who = "apply", role = "Resource Policy Contributor", scope = data.azurerm_management_group.root.id }
-    apply-role-assignments  = { who = "apply", role = "Role Based Access Control Administrator", scope = data.azurerm_management_group.root.id, condition = local.only_tag_contributor }
+    apply-role-assignments  = { who = "apply", role = "Role Based Access Control Administrator", scope = data.azurerm_management_group.root.id, condition = local.assignable_roles }
+    apply-vending           = { who = "apply", role = azurerm_role_definition.vendor.name, role_id = azurerm_role_definition.vendor.role_definition_resource_id, scope = data.azurerm_management_group.root.id }
     apply-state             = { who = "apply", role = "Storage Blob Data Contributor", scope = azurerm_storage_container.state.id }
     plan-read               = { who = "plan", role = "Reader", scope = data.azurerm_management_group.root.id }
     plan-state              = { who = "plan", role = "Storage Blob Data Reader", scope = azurerm_storage_container.state.id }
+  }
+}
+
+# Exactly what environment vending creates, and nothing else: resource groups, their networks,
+# budgets and delete locks. Contributor would also let the pipeline create VMs, databases and
+# anything else in every subscription.
+resource "azurerm_role_definition" "vendor" {
+  name              = "Guardrails environment vendor"
+  scope             = data.azurerm_management_group.root.id
+  description       = "Creates vended environments: resource groups, networks, budgets and delete locks."
+  assignable_scopes = [data.azurerm_management_group.root.id]
+
+  permissions {
+    actions = [
+      "Microsoft.Resources/subscriptions/resourceGroups/read",
+      "Microsoft.Resources/subscriptions/resourceGroups/write",
+      "Microsoft.Resources/subscriptions/resourceGroups/delete",
+      "Microsoft.Network/virtualNetworks/read",
+      "Microsoft.Network/virtualNetworks/write",
+      "Microsoft.Network/virtualNetworks/delete",
+      "Microsoft.Network/virtualNetworks/subnets/read",
+      "Microsoft.Network/virtualNetworks/subnets/write",
+      "Microsoft.Network/virtualNetworks/subnets/delete",
+      "Microsoft.Network/virtualNetworks/subnets/join/action",
+      "Microsoft.Network/networkSecurityGroups/read",
+      "Microsoft.Network/networkSecurityGroups/write",
+      "Microsoft.Network/networkSecurityGroups/delete",
+      "Microsoft.Network/networkSecurityGroups/join/action",
+      "Microsoft.Consumption/budgets/read",
+      "Microsoft.Consumption/budgets/write",
+      "Microsoft.Consumption/budgets/delete",
+      "Microsoft.Authorization/locks/read",
+      "Microsoft.Authorization/locks/write",
+      "Microsoft.Authorization/locks/delete",
+    ]
   }
 }
 
@@ -207,12 +252,41 @@ resource "azurerm_role_assignment" "pipeline" {
   for_each = local.grants
 
   scope                = each.value.scope
-  role_definition_name = each.value.role
+  role_definition_name = lookup(each.value, "role_id", null) == null ? each.value.role : null
+  role_definition_id   = lookup(each.value, "role_id", null)
   principal_id         = azuread_service_principal.pipeline[each.value.who].object_id
   principal_type       = "ServicePrincipal"
   condition            = lookup(each.value, "condition", null)
   condition_version    = lookup(each.value, "condition", null) == null ? null : "2.0"
   description          = "guardrails-${each.value.who}: ${each.key}"
+}
+
+# --- Groups for the demo teams --------------------------------------------------------------------
+
+# Environment requests name these groups. In a real company they'd already exist; here bootstrap
+# creates one per pretend team, plus finance, who can read every environment's costs.
+resource "azuread_group" "team" {
+  for_each = toset(var.demo_teams)
+
+  display_name            = "grp-guardrails-${each.key}"
+  description             = "Guardrails demo team: ${each.key}. Named in environment requests."
+  security_enabled        = true
+  prevent_duplicate_names = true
+  owners                  = [data.azurerm_client_config.current.object_id]
+}
+
+# Vending looks groups up by name, so both pipeline identities may read groups in Microsoft Graph,
+# and nothing else there.
+data "azuread_service_principal" "graph" {
+  client_id = "00000003-0000-0000-c000-000000000000" # Microsoft Graph
+}
+
+resource "azuread_app_role_assignment" "read_groups" {
+  for_each = azuread_service_principal.pipeline
+
+  app_role_id         = data.azuread_service_principal.graph.app_role_ids["Group.Read.All"]
+  principal_object_id = each.value.object_id
+  resource_object_id  = data.azuread_service_principal.graph.object_id
 }
 
 # The person running bootstrap also needs to read and write state: Owner covers the

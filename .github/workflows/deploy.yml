@@ -1,5 +1,9 @@
 # Plan on pull requests, apply on main, and check nightly that Azure still matches the code.
 #
+# Two stacks, each with its own state: platform/ (management groups and policy) and vending/
+# (one environment per file in environments/). Platform applies first, so new rules are in
+# place before new environments are created under them.
+#
 # Signs in to Azure with OpenID Connect: GitHub issues a short-lived token for this run, and
 # Entra ID trusts it only for the subjects bootstrap/ set up. There are no secrets to leak.
 # Every job is skipped until bootstrap/bootstrap.sh has set the repository variables.
@@ -7,10 +11,10 @@ name: Deploy
 
 on:
   pull_request:
-    paths: ["platform/**", "modules/**", "policies/**", ".github/workflows/deploy.yml"]
+    paths: ["platform/**", "vending/**", "modules/**", "policies/**", "environments/**", ".github/workflows/deploy.yml"]
   push:
     branches: [main]
-    paths: ["platform/**", "modules/**", "policies/**", ".github/workflows/deploy.yml"]
+    paths: ["platform/**", "vending/**", "modules/**", "policies/**", "environments/**", ".github/workflows/deploy.yml"]
   schedule:
     - cron: "17 9 * * *" # 09:17 UTC, early morning in Winnipeg
   workflow_dispatch:
@@ -31,29 +35,39 @@ env:
   TF_IN_AUTOMATION: "true"
   TF_INPUT: "false"
   TF_VAR_subscription_placement: ${{ vars.SUBSCRIPTION_PLACEMENT }}
+  BACKEND: >-
+    -backend-config=resource_group_name=${{ vars.TFSTATE_RESOURCE_GROUP }}
+    -backend-config=storage_account_name=${{ vars.TFSTATE_STORAGE_ACCOUNT }}
+    -backend-config=container_name=${{ vars.TFSTATE_CONTAINER }}
 
 jobs:
   plan:
-    name: Plan
+    name: Plan ${{ matrix.stack }}
     if: vars.AZURE_PLAN_CLIENT_ID != '' && github.event_name != 'push'
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        stack: [platform, vending]
     env:
       ARM_CLIENT_ID: ${{ vars.AZURE_PLAN_CLIENT_ID }}
     defaults:
       run:
-        working-directory: platform
+        working-directory: ${{ matrix.stack }}
     steps:
       - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Check environment requests
+        if: matrix.stack == 'vending'
+        run: python -m tools.vending check
+        working-directory: .
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "1.17.1"
           terraform_wrapper: false
-      - name: terraform init
-        run: >
-          terraform init
-          -backend-config="resource_group_name=${{ vars.TFSTATE_RESOURCE_GROUP }}"
-          -backend-config="storage_account_name=${{ vars.TFSTATE_STORAGE_ACCOUNT }}"
-          -backend-config="container_name=${{ vars.TFSTATE_CONTAINER }}"
+      - run: terraform init $BACKEND
       - name: terraform plan
         id: plan
         # The plan identity can only read, so it plans without taking the state lock.
@@ -67,12 +81,16 @@ jobs:
       - name: Summary
         run: |
           {
-            echo "## Terraform plan"
+            echo "## Terraform plan: ${{ matrix.stack }}"
             echo
             case "${{ steps.plan.outputs.exitcode }}" in
               0) echo "No changes: Azure matches the code." ;;
               2) echo "Changes to apply:" ;;
             esac
+            if [ "${{ matrix.stack }}" = vending ]; then
+              echo
+              (cd .. && python -m tools.vending summary)
+            fi
             echo
             echo '```'
             terraform show -no-color tfplan | grep -E '^\s*[#~+-]|Plan:' | head -200
@@ -81,11 +99,11 @@ jobs:
       - name: Fail the nightly check on drift
         if: github.event_name == 'schedule' && steps.plan.outputs.exitcode == '2'
         run: |
-          echo "::error::Azure no longer matches the code. Someone changed policy or management groups outside a pull request; see the plan above."
+          echo "::error::Azure no longer matches the code in ${{ matrix.stack }}/. Something was changed outside a pull request; see the plan above."
           exit 1
 
-  apply:
-    name: Apply
+  apply-platform:
+    name: Apply platform
     if: vars.AZURE_APPLY_CLIENT_ID != '' && github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: production
@@ -100,11 +118,36 @@ jobs:
         with:
           terraform_version: "1.17.1"
           terraform_wrapper: false
-      - name: terraform init
-        run: >
-          terraform init
-          -backend-config="resource_group_name=${{ vars.TFSTATE_RESOURCE_GROUP }}"
-          -backend-config="storage_account_name=${{ vars.TFSTATE_STORAGE_ACCOUNT }}"
-          -backend-config="container_name=${{ vars.TFSTATE_CONTAINER }}"
+      - run: terraform init $BACKEND
       - run: terraform plan -out=tfplan
       - run: terraform apply tfplan
+
+  apply-vending:
+    name: Apply vending
+    needs: apply-platform
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      ARM_CLIENT_ID: ${{ vars.AZURE_APPLY_CLIENT_ID }}
+    defaults:
+      run:
+        working-directory: vending
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - run: python -m tools.vending check
+        working-directory: .
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.17.1"
+          terraform_wrapper: false
+      - run: terraform init $BACKEND
+      - run: terraform plan -out=tfplan
+      - name: terraform apply
+        run: |
+          started=$(date +%s)
+          terraform apply tfplan
+          echo "### Environments ready in $(( $(date +%s) - started )) s" >> "$GITHUB_STEP_SUMMARY"
+          terraform output -json environments | python -c "import json,sys; [print(f'- {k}: {v}') for k,v in json.load(sys.stdin).items()]" >> "$GITHUB_STEP_SUMMARY"

@@ -25,6 +25,10 @@ mock_provider "azurerm" {
     defaults = { id = "/subscriptions/00000000-0000-0000-0000-00000000bbbb/resourceGroups/rg-guardrails-tfstate/providers/Microsoft.Storage/storageAccounts/stgrstate/blobServices/default/containers/tfstate" }
   }
 
+  mock_resource "azurerm_role_definition" {
+    defaults = { role_definition_resource_id = "/providers/Microsoft.Management/managementGroups/guardrails/providers/Microsoft.Authorization/roleDefinitions/44444444-4444-4444-4444-444444444444" }
+  }
+
   mock_resource "azurerm_log_analytics_workspace" {
     defaults = { id = "/subscriptions/00000000-0000-0000-0000-00000000bbbb/resourceGroups/rg-guardrails-tfstate/providers/Microsoft.OperationalInsights/workspaces/log-guardrails-audit" }
   }
@@ -40,6 +44,13 @@ mock_provider "azuread" {
 
   mock_resource "azuread_service_principal" {
     defaults = { object_id = "00000000-0000-0000-0000-00000000ffff" }
+  }
+
+  mock_data "azuread_service_principal" {
+    defaults = {
+      object_id    = "00000000-0000-0000-0000-000000000999"
+      app_role_ids = { "Group.Read.All" = "00000000-0000-0000-0000-000000000777" }
+    }
   }
 }
 
@@ -121,11 +132,19 @@ run "the_apply_identity_cant_hand_out_owner" {
 
   assert {
     condition = (
-      strcontains(azurerm_role_assignment.pipeline["apply-role-assignments"].condition, "GuidEquals {4a9ae827-6dc8-4573-8ac7-8239d42aa03f}") &&
-      strcontains(azurerm_role_assignment.pipeline["apply-role-assignments"].condition, "StringEqualsIgnoreCase {'ServicePrincipal'}") &&
+      strcontains(azurerm_role_assignment.pipeline["apply-role-assignments"].condition, "GuidEquals {4a9ae827-6dc8-4573-8ac7-8239d42aa03f}\n    AND\n    @Request[Microsoft.Authorization/roleAssignments:PrincipalType] ForAnyOfAnyValues:StringEqualsIgnoreCase {'ServicePrincipal'}") &&
+      strcontains(azurerm_role_assignment.pipeline["apply-role-assignments"].condition, "GuidEquals {b24988ac-6180-42a0-ab88-20f7382dd24c, acdd72a7-3385-48ef-bd42-f606fba81ae7}\n    AND\n    @Request[Microsoft.Authorization/roleAssignments:PrincipalType] ForAnyOfAnyValues:StringEqualsIgnoreCase {'Group'}") &&
       azurerm_role_assignment.pipeline["apply-role-assignments"].condition_version == "2.0"
     )
-    error_message = "The apply identity may assign only Tag Contributor, and only to service principals."
+    error_message = "Tag Contributor only to service principals; Contributor and Reader only to groups."
+  }
+
+  assert {
+    condition = !anytrue([
+      for guid in ["8e3af657-a8ff-443c-a75c-2fe8c4bcb635", "18d7d88d-d35e-4fb5-a5c3-7773c20a72d9", "f58310d9-a9f6-439a-9e8d-f62e7b41a168"] :
+      strcontains(azurerm_role_assignment.pipeline["apply-role-assignments"].condition, guid)
+    ])
+    error_message = "Owner, User Access Administrator and RBAC Administrator can never be assigned."
   }
 
   assert {
@@ -134,8 +153,49 @@ run "the_apply_identity_cant_hand_out_owner" {
   }
 
   assert {
-    condition     = !anytrue([for g in values(azurerm_role_assignment.pipeline) : contains(["Owner", "Contributor", "User Access Administrator"], g.role_definition_name)])
+    condition     = !anytrue([for g in values(azurerm_role_assignment.pipeline) : contains(["Owner", "Contributor", "User Access Administrator"], coalesce(g.role_definition_name, "custom"))])
     error_message = "No identity gets Owner, Contributor or User Access Administrator."
+  }
+}
+
+run "the_vending_role_creates_only_environments" {
+  command = apply
+
+  assert {
+    condition     = azurerm_role_assignment.pipeline["apply-vending"].role_definition_id == azurerm_role_definition.vendor.role_definition_resource_id
+    error_message = "The apply identity gets the custom vending role."
+  }
+
+  assert {
+    condition = alltrue([
+      for a in azurerm_role_definition.vendor.permissions[0].actions :
+      !strcontains(a, "*") && anytrue([for p in ["Microsoft.Resources/subscriptions/resourceGroups/", "Microsoft.Network/virtualNetworks/", "Microsoft.Network/networkSecurityGroups/", "Microsoft.Consumption/budgets/", "Microsoft.Authorization/locks/"] : startswith(a, p)])
+    ])
+    error_message = "No wildcards, and nothing beyond resource groups, networks, budgets and locks: no VMs, databases or storage."
+  }
+
+  assert {
+    condition     = azurerm_role_definition.vendor.assignable_scopes == tolist([data.azurerm_management_group.root.id])
+    error_message = "The role can only be used inside Guardrails."
+  }
+}
+
+run "teams_have_groups_and_pipelines_can_only_read_them" {
+  command = apply
+
+  assert {
+    condition     = toset([for g in values(azuread_group.team) : g.display_name]) == toset(["grp-guardrails-payments", "grp-guardrails-storefront", "grp-guardrails-data", "grp-guardrails-support", "grp-guardrails-marketing", "grp-guardrails-finance"])
+    error_message = "One security group per demo team, plus finance."
+  }
+
+  assert {
+    condition     = alltrue([for g in values(azuread_group.team) : g.security_enabled])
+    error_message = "Groups used for access are security groups."
+  }
+
+  assert {
+    condition     = toset(keys(azuread_app_role_assignment.read_groups)) == toset(["plan", "apply"]) && alltrue([for a in values(azuread_app_role_assignment.read_groups) : a.app_role_id == "00000000-0000-0000-0000-000000000777"])
+    error_message = "Both pipeline identities get Group.Read.All in Microsoft Graph, and only that."
   }
 }
 

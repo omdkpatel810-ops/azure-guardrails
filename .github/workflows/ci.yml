@@ -22,6 +22,8 @@ jobs:
       - run: ruff format --check .
       - run: shellcheck bootstrap/bootstrap.sh
       - run: pytest --cov --cov-fail-under=100
+      - name: Environment requests
+        run: python -m tools.vending check
 
   terraform:
     name: Terraform (${{ matrix.dir }})
@@ -29,7 +31,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        dir: [platform, bootstrap, modules/management-groups, modules/policy]
+        dir: [platform, vending, bootstrap, modules/management-groups, modules/policy, modules/environment]
     steps:
       - uses: actions/checkout@v5
       - uses: hashicorp/setup-terraform@v3
@@ -57,7 +59,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
       - run: |
-          for dir in platform bootstrap modules/management-groups modules/policy; do
+          for dir in platform vending bootstrap modules/management-groups modules/policy modules/environment; do
             echo "::group::$dir"
             tflint --chdir="$dir" --config="$PWD/.tflint.hcl"
             echo "::endgroup::"

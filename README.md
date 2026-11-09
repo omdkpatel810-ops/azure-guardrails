@@ -4,10 +4,10 @@
 
 [![CI](https://github.com/omdkpatel810-ops/azure-guardrails/actions/workflows/ci.yml/badge.svg)](https://github.com/omdkpatel810-ops/azure-guardrails/actions/workflows/ci.yml)
 
-> **Status: milestone 1 of 4 is built and tested offline.** The management groups, the policies and the
-> pipeline are done: 22 Terraform tests run against mocked Azure providers, and 187 Python tests check
-> the rules themselves. The first real deployment waits on the Azure subscription, and its measured
-> results will go here.
+> **Status: milestones 1 and 2 of 4 are built and tested offline.** The management groups, the policies,
+> environment vending and the pipeline are done: 34 Terraform tests run against mocked Azure providers,
+> and 215 Python tests check the rules and the requests. The first real deployment waits on the Azure
+> subscription, and its measured results will go here.
 
 ## The problem
 
@@ -54,6 +54,44 @@ in [`policies/initiatives`](policies/initiatives), and assigned in
 [`policies/assignments.json`](policies/assignments.json). Terraform deploys exactly those files, and the
 Python tests read the same files, so what's tested is what's deployed.
 
+## Milestone 2: environments by pull request
+
+A team asks for an environment by adding one file to [`environments/`](environments):
+
+```json
+{
+  "team": "payments",
+  "environment": "dev",
+  "owner": "payments-lead@example.com",
+  "cost_center": "cc-2040",
+  "region": "canadacentral",
+  "monthly_budget": 150,
+  "access": { "contributors": ["grp-guardrails-payments"], "readers": ["grp-guardrails-finance"] },
+  "address_space": "10.100.1.0/24"
+}
+```
+
+The pull request runs [`tools/vending.py`](tools/vending.py), which checks what Terraform can't:
+
+- the file is named after its team and environment;
+- the budget is within the limit for the environment (500 a month for dev and test, 5,000 for prod);
+- no two networks overlap, and each sits inside `10.100.0.0/16`;
+- the resource group it creates passes every guardrail in its management group, using the same evaluator.
+
+Then it plans `vending/` and shows the request as a table. Merging creates, through
+[`modules/environment`](modules/environment/main.tf):
+
+| What | Detail |
+|---|---|
+| Resource group | `rg-<team>-<environment>`, tagged with owner, cost centre, environment, team and the request file |
+| Budget | Monthly, with email alerts to the owner at 50%, 80% and 100% of actual spend, and at 100% forecast |
+| Access | The team's Entra ID group gets Contributor in dev and test, and only Reader in prod |
+| Network (optional) | A virtual network, a workloads subnet with no default internet access, and a network security group on it |
+| Prod lock | Prod resource groups can't be deleted until the request is removed in a reviewed pull request |
+
+Seven requests from five pretend teams (payments, storefront, data, support and marketing) are in
+[`environments/`](environments). Bootstrap creates their groups.
+
 ## Try the rules without Azure
 
 **In the browser:** the [Guardrails playground](https://huggingface.co/spaces/Om1627/azure-guardrails) on Hugging Face
@@ -99,8 +137,12 @@ deployment's measured results are the real test.
 - **Two identities.** `guardrails-plan` can only read. Pull requests and the nightly drift check use it.
   `guardrails-apply` can change things, but only from `main` through the `production` environment.
 - **The pipeline can't make anyone Owner.** It assigns roles through Role Based Access Control
-  Administrator with a condition: only Tag Contributor, and only to service principals (the policies'
-  own identities).
+  Administrator with a condition: Tag Contributor only to service principals (the policies' own
+  identities), and Contributor or Reader only to groups (vended environments). Owner, User Access
+  Administrator and RBAC Administrator are never assignable.
+- **Vending can only build environments.** Instead of Contributor, the pipeline gets a custom role
+  that can create resource groups, networks, budgets and delete locks, and nothing else: no VMs,
+  databases or storage. In Microsoft Graph it can only read groups.
 - **Least privilege for the policies, too.** Microsoft's built-in tag inheritance policy asks for
   Contributor. Tag Contributor is enough to copy a tag, so that's what these ask for. Planning fails if a
   policy ever asks for a role outside `allowed_remediation_roles`.
@@ -115,22 +157,23 @@ deployment's measured results are the real test.
 
 | What | How | Count |
 |---|---|---|
-| Each rule against resources that should and shouldn't pass | pytest, via the evaluator | 187 Python tests, 100% coverage |
+| Each rule against resources that should and shouldn't pass | pytest, via the evaluator | 215 Python tests, 100% coverage |
 | The policy files: names, parameters, references, roles | pytest | (included above) |
 | `bootstrap.sh`: first run, re-run, region limits, GitHub fallbacks | pytest, with stand-in `az`, `terraform` and `gh` | (included above) |
 | The Hugging Face Space: every example, bad input, the page, the published folder | pytest, with Gradio | (included above) |
-| The hierarchy, assignments, identities, exemption rules | `terraform test` with mocked providers | 22 |
+| Environment requests: every kind of mistake, overlapping networks, the guardrails | pytest | (included above) |
+| The hierarchy, assignments, identities, exemption rules, vended environments, pipeline permissions | `terraform test` with mocked providers | 34 |
 | Formatting, validation, linting, security scanning | `terraform fmt` and `validate`, tflint, Checkov, ruff, shellcheck | every push |
 
-Checkov passes 15 checks on the bootstrap. It skips 7, each with its reason written next to it in
-[`bootstrap/main.tf`](bootstrap/main.tf), and passes all 152 checks on the GitHub workflows.
+Checkov passes 23 checks on the Terraform. It skips 7, each with its reason written next to it in
+[`bootstrap/main.tf`](bootstrap/main.tf), and passes all 224 checks on the GitHub workflows.
 
 Run everything locally:
 
 ```bash
 pip install -r requirements-dev.txt
 pytest --cov
-for d in platform bootstrap modules/management-groups modules/policy; do
+for d in platform vending bootstrap modules/*; do
   (cd $d && terraform init -backend=false && terraform test)
 done
 ```
@@ -153,7 +196,9 @@ The script shows each plan and waits for you to type `yes`. It:
 1. Checks the subscription allows Canada Central. Some offers, Azure for Students among them, limit
    regions. If yours does, the script lists the allowed ones and stops.
 2. Creates the Guardrails root management group.
-3. Applies `bootstrap/`, then moves bootstrap's own state into the storage it just created.
+3. Applies `bootstrap/`: state storage, the two pipeline identities and their roles, and a group for each
+   demo team. Granting the pipelines read access to groups in Microsoft Graph needs an Entra ID admin,
+   which you are in your own directory. Then it moves bootstrap's own state into the new storage.
 4. Applies `platform/` once, as you. This creates the hierarchy and policies and places the
    subscription. Moving a subscription needs Owner, which the pipeline deliberately doesn't have.
 5. Sets the repository variables and the `production` environment, or prints them for you to add.
@@ -181,7 +226,7 @@ of that.
 ## Roadmap
 
 1. **Management groups and policy as code** ✅ built and tested offline (deployment pending)
-2. **Environment vending:** a pull request creates a resource group with an owner, a budget and access
+2. **Environment vending** ✅ built and tested offline (deployment pending)
 3. **FinOps:** budgets, cost exports and a cost dashboard by team
 4. **Seed the mess:** create untagged VMs and public storage, find and fix them, and measure how long it takes
 
@@ -189,8 +234,11 @@ of that.
 
 ```
 policies/            the rules, as JSON: definitions, initiatives, assignments
-modules/             management-groups and policy Terraform modules, each with tests/
-platform/            the root configuration the pipeline applies
+modules/             management-groups, policy and environment Terraform modules, each with tests/
+platform/            management groups and policy: the first stack the pipeline applies
+environments/        one request per vended environment
+vending/             builds every request: the second stack
+tools/vending.py     checks requests and summarises them for pull requests
 bootstrap/           state storage, pipeline identities, and bootstrap.sh
 tools/policy_eval.py the offline policy evaluator
 examples/            sample resources for trying the rules

@@ -35,3 +35,9 @@ variable "tags" {
     error_message = "Set owner, cost-center and environment."
   }
 }
+
+variable "demo_teams" {
+  description = "Pretend teams to create groups for (grp-guardrails-<team>). Environment requests name these."
+  type        = list(string)
+  default     = ["payments", "storefront", "data", "support", "marketing", "finance"]
+}
