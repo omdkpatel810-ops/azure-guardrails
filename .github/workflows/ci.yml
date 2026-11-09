@@ -31,7 +31,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        dir: [platform, vending, bootstrap, modules/management-groups, modules/policy, modules/environment]
+        dir: [platform, vending, bootstrap, modules/management-groups, modules/policy, modules/environment, drills/mess]
     steps:
       - uses: actions/checkout@v5
       - uses: hashicorp/setup-terraform@v3
@@ -59,7 +59,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
       - run: |
-          for dir in platform vending bootstrap modules/management-groups modules/policy modules/environment; do
+          for dir in platform vending bootstrap modules/management-groups modules/policy modules/environment drills/mess; do
             echo "::group::$dir"
             tflint --chdir="$dir" --config="$PWD/.tflint.hcl"
             echo "::endgroup::"

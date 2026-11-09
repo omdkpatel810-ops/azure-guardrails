@@ -4,10 +4,11 @@
 
 [![CI](https://github.com/omdkpatel810-ops/azure-guardrails/actions/workflows/ci.yml/badge.svg)](https://github.com/omdkpatel810-ops/azure-guardrails/actions/workflows/ci.yml)
 
-> **Status: milestones 1 to 3 of 4 are built and tested offline.** The management groups, the policies,
-> environment vending, the FinOps report and the pipelines are done: 35 Terraform tests run against
-> mocked Azure providers, and 268 Python tests check the rules, the requests and the report. The first
-> real deployment waits on the Azure subscription, and its measured results will go here.
+> **Status: all four milestones are built and tested offline.** The management groups, the policies,
+> environment vending, the FinOps report, the mess drill and the pipelines are done: 38 Terraform tests
+> run against mocked Azure providers, and 282 Python tests check the rules, the requests, the report and
+> the drill. The first real deployment waits on the Azure subscription; the drill's measured results
+> will go in [Results](#results).
 
 ## The problem
 
@@ -127,6 +128,44 @@ python -m finops.report --costs build/sample/costs.csv --resources build/sample/
   --advisor build/sample/advisor.json --html build/report.html
 ```
 
+## Milestone 4: the mess drill
+
+Guardrails should find a mess and help fix it, and the drill puts a number on that. In Cloud Shell, as
+the subscription's owner:
+
+```bash
+python drills/drill.py seed --yes    # about $0.30 an hour while the mess exists
+python drills/drill.py measure       # start the clock
+python drills/drill.py clean --yes
+```
+
+**Seed.** [`drills/mess`](drills/mess/main.tf) creates a forgotten proof of concept:
+- two VMs left running, with no tags;
+- a storage account that allows anonymous reads;
+- a database at S3 that would be fine at S0;
+- a disk, a public IP and an App Service plan that nobody uses.
+
+A 48-hour exemption, with an owner and a reason like any other, lets it be created under the guardrails,
+as if it predated them.
+
+**Find.** `measure` removes the exemption and starts the clock. It asks Azure Policy to scan, and waits
+until all 11 resources are reported non-compliant.
+
+**Fix.** Remediation tasks copy the three missing tags from the resource group. Terraform closes the
+storage, deletes the idle disk, IP and plan, and shrinks the database. The clock stops when the resource
+group is fully compliant.
+
+**Measure.** It saves the time to find, the time to fix and what broke which rule. It also prices what
+the clean-up removed with [Azure's public retail prices](https://learn.microsoft.com/rest/api/cost-management/retail-prices/azure-retail-prices).
+Everything goes to `drills/results/`.
+
+[`tests/test_drill.py`](tests/test_drill.py) runs the whole sequence against a stand-in shell and clock,
+including a drill that runs out of time.
+
+## Results
+
+Pending the first deployment. Each drill adds its table here.
+
 ## Try the rules without Azure
 
 **In the browser:** the [Guardrails playground](https://huggingface.co/spaces/Om1627/azure-guardrails) on Hugging Face
@@ -192,24 +231,26 @@ deployment's measured results are the real test.
 
 | What | How | Count |
 |---|---|---|
-| Each rule against resources that should and shouldn't pass | pytest, via the evaluator | 268 Python tests, 100% coverage |
+| Each rule against resources that should and shouldn't pass | pytest, via the evaluator | 282 Python tests, 100% coverage |
 | The policy files: names, parameters, references, roles | pytest | (included above) |
 | `bootstrap.sh`: first run, re-run, region limits, GitHub fallbacks | pytest, with stand-in `az`, `terraform` and `gh` | (included above) |
 | The Hugging Face Space: every example, bad input, the page, the published folder | pytest, with Gradio | (included above) |
 | Environment requests: every kind of mistake, overlapping networks, the guardrails | pytest | (included above) |
 | FinOps: three export formats, each idle rule, Advisor, attribution, budgets, the report | pytest | (included above) |
-| The hierarchy, assignments, identities, exemption rules, vended environments, pipeline permissions, cost exports | `terraform test` with mocked providers | 35 |
+| The mess drill: step order, timing, timeouts, prices | pytest, with a stand-in shell and clock | (included above) |
+| The hierarchy, assignments, identities, exemption rules, vended environments, pipeline permissions, cost exports, the mess | `terraform test` with mocked providers | 38 |
 | Formatting, validation, linting, security scanning | `terraform fmt` and `validate`, tflint, Checkov, ruff, shellcheck | every push |
 
-Checkov passes 33 checks on the Terraform. It skips 16, each with its reason written next to it in
-[`bootstrap/`](bootstrap), and passes all 260 checks on the GitHub workflows.
+Checkov passes 56 checks on the Terraform and skips 44, each with its reason written next to it: 16 in
+[`bootstrap/`](bootstrap), and 28 in [`drills/mess`](drills/mess/main.tf), which is insecure on purpose.
+It passes all 260 checks on the GitHub workflows.
 
 Run everything locally:
 
 ```bash
 pip install -r requirements-dev.txt
 pytest --cov
-for d in platform vending bootstrap modules/*; do
+for d in platform vending bootstrap modules/* drills/mess; do
   (cd $d && terraform init -backend=false && terraform test)
 done
 ```
@@ -262,7 +303,7 @@ A nightly plan fails if anyone changed the managed policies or management groups
 1. **Management groups and policy as code** ✅ built and tested offline (deployment pending)
 2. **Environment vending** ✅ built and tested offline (deployment pending)
 3. **FinOps** ✅ built and tested offline (deployment pending)
-4. **Seed the mess:** create untagged VMs and public storage, find and fix them, and measure how long it takes
+4. **The mess drill** ✅ built and tested offline (deployment pending)
 
 ## Layout
 
@@ -274,6 +315,7 @@ environments/        one request per vended environment
 vending/             builds every request: the second stack
 tools/vending.py     checks requests and summarises them for pull requests
 finops/              the FinOps report: export reader, idle resources, Advisor, sample data
+drills/              the mess drill: the mess in Terraform, and drill.py to seed, measure and clean
 bootstrap/           state storage, pipeline identities, and bootstrap.sh
 tools/policy_eval.py the offline policy evaluator
 examples/            sample resources for trying the rules
