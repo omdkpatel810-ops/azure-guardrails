@@ -10,6 +10,16 @@ import gradio as gr
 
 from demo import EXAMPLES, GROUPS, HIERARCHY, evaluate, finops_html, load_example, rules_rows, tags_text, verdict_html
 
+try:  # Hugging Face's free tier runs Gradio Spaces on ZeroGPU, which expects one GPU function at startup.
+    import spaces
+
+    @spaces.GPU
+    def _no_gpu_needed() -> None:  # pragma: no cover - never called; this app runs on the CPU
+        """Satisfies ZeroGPU's startup check. Nothing here uses a GPU."""
+
+except ImportError:  # pragma: no cover - outside Hugging Face
+    pass
+
 REPO = "https://github.com/omdkpatel810-ops/azure-guardrails"
 FIRST_EXAMPLE = next(iter(EXAMPLES))
 
