@@ -35,7 +35,7 @@ def requests(tmp_path):
 
 def test_the_real_requests_pass():
     assert check() == []
-    assert len(load()[0]) == 7
+    assert len(load()[0]) == 8
 
 
 def test_a_good_request_passes(requests):
@@ -127,12 +127,12 @@ def test_the_summary_for_a_pull_request():
     )
     assert row in text
     assert "| `rg-data-dev` |" in text and "| none |" in text
-    assert text.endswith("7 environments, $4,490 a month in budgets.")
+    assert text.endswith("8 environments, $4,550 a month in budgets.")
 
 
 def test_the_command_line(tmp_path, capsys):
     assert main(["check"]) == 0
-    assert "OK: 7 environment requests pass." in capsys.readouterr().out
+    assert "OK: 8 environment requests pass." in capsys.readouterr().out
     assert main(["summary"]) == 0
     assert "rg-storefront-prod" in capsys.readouterr().out
     (tmp_path / "alpha-dev.json").write_text(json.dumps({**GOOD, "monthly_budget": -5}))

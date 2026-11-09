@@ -210,7 +210,7 @@ def test_budgets(sample_report):
     status = {e.name: e.status for e in sample_report.environments}
     assert status["rg-data-dev"] == "Over budget"  # the oversized database
     assert status["rg-storefront-dev"] == "Watch"
-    assert list(status.values()).count("On track") == 5
+    assert list(status.values()).count("On track") == 6  # including OneView, with no spend yet
     assert sample_report.environments[0].name == "rg-data-dev"  # trouble first
 
 
@@ -278,7 +278,7 @@ def test_no_costs_means_no_report():
 
 
 def test_environments_default_to_the_repository():
-    assert len(load_environments()) == 7
+    assert len(load_environments()) == 8
     assert load_environments(load_environments.__defaults__[0] / "missing") == []
 
 

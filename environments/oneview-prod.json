@@ -1,0 +1,14 @@
+{
+  "team": "oneview",
+  "environment": "prod",
+  "owner": "it-ops-lead@example.com",
+  "cost_center": "cc-7300",
+  "region": "canadacentral",
+  "monthly_budget": 60,
+  "access": {
+    "contributors": [],
+    "readers": [
+      "grp-guardrails-finance"
+    ]
+  }
+}

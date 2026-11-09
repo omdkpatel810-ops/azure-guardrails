@@ -129,7 +129,9 @@ Then it plans `vending/` and shows the request as a table. Merging creates, thro
 | Prod lock | Prod resource groups can't be deleted until the request is removed in a reviewed pull request |
 
 Seven requests from five pretend teams (payments, storefront, data, support and marketing) are in
-[`environments/`](environments). Bootstrap creates their groups.
+[`environments/`](environments), and bootstrap creates their groups. The eighth is real:
+[OneView](https://github.com/omdkpatel810-ops/azure-oneview), the next project, gets its resource group
+the same way.
 
 ## Milestone 3: FinOps
 
