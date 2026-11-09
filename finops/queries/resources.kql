@@ -1,0 +1,9 @@
+// Every resource in the subscription, with what the FinOps report needs to spot idle ones.
+// Run with: az graph query -q "$(cat finops/queries/resources.kql)" --first 1000 -o json
+resources
+| project id, name, type, location, resourceGroup, tags, sku,
+          powerState = tostring(properties.extended.instanceView.powerState.code),
+          diskState = tostring(properties.diskState),
+          ipConfiguration = properties.ipConfiguration,
+          natGateway = properties.natGateway,
+          numberOfSites = toint(properties.numberOfSites)

@@ -1,0 +1,66 @@
+# The FinOps report, every morning from the newest cost export: spend by team, spend with no owner,
+# budgets in trouble, and idle or oversized resources. Signs in as the read-only plan identity.
+# Skipped until bootstrap/bootstrap.sh has set the repository variables.
+name: FinOps report
+
+on:
+  schedule:
+    - cron: "41 13 * * *" # 13:41 UTC: after the overnight export, before the Winnipeg workday
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  report:
+    name: Build the report
+    if: vars.COST_EXPORT_ACCOUNT != '' && vars.AZURE_PLAN_CLIENT_ID != ''
+    runs-on: ubuntu-latest
+    env:
+      ACCOUNT: ${{ vars.COST_EXPORT_ACCOUNT }}
+      CONTAINER: ${{ vars.COST_EXPORT_CONTAINER }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_PLAN_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Download the newest cost export
+        id: export
+        run: |
+          name=$(az storage blob list --auth-mode login --account-name "$ACCOUNT" --container-name "$CONTAINER" \
+            --prefix daily/ --query "sort_by([?ends_with(name, '.csv')], &properties.lastModified)[-1].name" -o tsv)
+          if [ -z "$name" ]; then
+            echo "::notice::No cost export yet. The first one runs the day after bootstrap."
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          az storage blob download --auth-mode login --account-name "$ACCOUNT" --container-name "$CONTAINER" \
+            --name "$name" --file costs.csv --only-show-errors > /dev/null
+          echo "Using $name"
+          echo "found=true" >> "$GITHUB_OUTPUT"
+      - name: Inventory and Advisor recommendations
+        if: steps.export.outputs.found == 'true'
+        run: |
+          az config set extension.use_dynamic_install=yes_without_prompt --only-show-errors
+          az graph query -q "$(cat finops/queries/resources.kql)" --first 1000 -o json > resources.json
+          az advisor recommendation list --category Cost -o json > advisor.json
+      - name: Build the report
+        if: steps.export.outputs.found == 'true'
+        run: |
+          python -m finops.report --costs costs.csv --resources resources.json --advisor advisor.json \
+            --html finops-report.html --json finops-report.json --markdown summary.md
+          cat summary.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: steps.export.outputs.found == 'true'
+        with:
+          name: finops-report
+          path: |
+            finops-report.html
+            finops-report.json
+          retention-days: 30
