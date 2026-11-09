@@ -9,7 +9,7 @@ testpaths = ["tests"]
 addopts = "--strict-markers"
 
 [tool.coverage.run]
-source = ["tools", "space", "scripts", "finops"]
+source = ["tools", "space", "scripts", "finops", "drills"]
 branch = true
 
 [tool.coverage.report]
@@ -27,6 +27,8 @@ select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
 # One resource or fixture per line reads better than wrapped tuples.
 "finops/sample.py" = ["E501"]
 "tests/test_finops.py" = ["E501"]
+"tests/test_drill.py" = ["E501"]
+"drills/drill.py" = ["E501"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["app", "demo", "finops", "scripts", "tools"]
+known-first-party = ["app", "demo", "drills", "finops", "scripts", "tools"]

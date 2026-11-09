@@ -12,3 +12,5 @@ __pycache__/
 .pytest_cache/
 .coverage
 .ruff_cache/
+drills/mess/drill.auto.tfvars.json
+drills/mess/.terraform.lock.hcl
