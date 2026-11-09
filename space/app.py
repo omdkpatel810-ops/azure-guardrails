@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import gradio as gr
 
-from demo import EXAMPLES, GROUPS, HIERARCHY, evaluate, load_example, rules_rows, tags_text, verdict_html
+from demo import EXAMPLES, GROUPS, HIERARCHY, evaluate, finops_html, load_example, rules_rows, tags_text, verdict_html
 
 REPO = "https://github.com/omdkpatel810-ops/azure-guardrails"
 FIRST_EXAMPLE = next(iter(EXAMPLES))
@@ -100,6 +100,9 @@ def build() -> gr.Blocks:
                 max_height=900,
                 column_widths=["14%", "26%", "45%", "15%"],
             )
+
+        with gr.Tab("FinOps report"):
+            gr.HTML(finops_html())
 
         outputs = [verdict, results, tags]
         example.change(pick, example, [group, resource, resource_group, *outputs])

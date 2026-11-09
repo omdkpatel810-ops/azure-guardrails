@@ -4,10 +4,10 @@
 
 [![CI](https://github.com/omdkpatel810-ops/azure-guardrails/actions/workflows/ci.yml/badge.svg)](https://github.com/omdkpatel810-ops/azure-guardrails/actions/workflows/ci.yml)
 
-> **Status: milestones 1 and 2 of 4 are built and tested offline.** The management groups, the policies,
-> environment vending and the pipeline are done: 34 Terraform tests run against mocked Azure providers,
-> and 215 Python tests check the rules and the requests. The first real deployment waits on the Azure
-> subscription, and its measured results will go here.
+> **Status: milestones 1 to 3 of 4 are built and tested offline.** The management groups, the policies,
+> environment vending, the FinOps report and the pipelines are done: 35 Terraform tests run against
+> mocked Azure providers, and 268 Python tests check the rules, the requests and the report. The first
+> real deployment waits on the Azure subscription, and its measured results will go here.
 
 ## The problem
 
@@ -92,6 +92,41 @@ Then it plans `vending/` and shows the request as a table. Merging creates, thro
 Seven requests from five pretend teams (payments, storefront, data, support and marketing) are in
 [`environments/`](environments). Bootstrap creates their groups.
 
+## Milestone 3: FinOps
+
+Bootstrap sets up the data, once:
+
+- a **daily export** of the month's actual costs to storage, kept for 13 months;
+- an **anomaly alert**: Cost Management emails when spending breaks its usual daily pattern;
+- the subscription's **activity log** in the audit workspace, so every change has a who and a when.
+
+Then [`finops/report.py`](finops/report.py) turns the newest export, an
+[Azure Resource Graph inventory](finops/queries/resources.kql) and Azure Advisor's cost recommendations
+into one report. A [workflow](.github/workflows/finops.yml) builds it every morning, signed in as the
+read-only identity. The report shows:
+
+| Section | What it answers |
+|---|---|
+| Spend with an owner | The headline measure: the share of spend on resources with an owner tag. The target is 100%. |
+| Spend by team | By team tag; failing that, matched to a team through its cost centre or resource group in `environments/` |
+| Budgets | Each vended environment's spend and month-end forecast against its budget: On track, Watch (over 80%) or Over budget |
+| Spend with no owner | Each untagged resource and what it has cost this month |
+| Savings found | Idle resources (VMs stopped but still allocated, unattached disks, orphaned public IPs, App Service plans with no apps), plus Advisor's rightsizing, with what each costs a month |
+
+It reads every export format Azure produces: pay-as-you-go, Microsoft Customer Agreement and FOCUS
+columns, including older exports' tags without braces.
+
+**Try it without Azure.** [`finops/sample.py`](finops/sample.py) writes a month of made-up data in
+Azure's formats: the five teams, the platform, and a forgotten proof of concept with two untagged VMs,
+orphaned disks and IPs, and a Premium database that pushes the data team over budget. The Hugging Face
+Space shows the report on it, or:
+
+```bash
+python -m finops.sample build/sample
+python -m finops.report --costs build/sample/costs.csv --resources build/sample/resources.json \
+  --advisor build/sample/advisor.json --html build/report.html
+```
+
 ## Try the rules without Azure
 
 **In the browser:** the [Guardrails playground](https://huggingface.co/spaces/Om1627/azure-guardrails) on Hugging Face
@@ -157,16 +192,17 @@ deployment's measured results are the real test.
 
 | What | How | Count |
 |---|---|---|
-| Each rule against resources that should and shouldn't pass | pytest, via the evaluator | 215 Python tests, 100% coverage |
+| Each rule against resources that should and shouldn't pass | pytest, via the evaluator | 268 Python tests, 100% coverage |
 | The policy files: names, parameters, references, roles | pytest | (included above) |
 | `bootstrap.sh`: first run, re-run, region limits, GitHub fallbacks | pytest, with stand-in `az`, `terraform` and `gh` | (included above) |
 | The Hugging Face Space: every example, bad input, the page, the published folder | pytest, with Gradio | (included above) |
 | Environment requests: every kind of mistake, overlapping networks, the guardrails | pytest | (included above) |
-| The hierarchy, assignments, identities, exemption rules, vended environments, pipeline permissions | `terraform test` with mocked providers | 34 |
+| FinOps: three export formats, each idle rule, Advisor, attribution, budgets, the report | pytest | (included above) |
+| The hierarchy, assignments, identities, exemption rules, vended environments, pipeline permissions, cost exports | `terraform test` with mocked providers | 35 |
 | Formatting, validation, linting, security scanning | `terraform fmt` and `validate`, tflint, Checkov, ruff, shellcheck | every push |
 
-Checkov passes 23 checks on the Terraform. It skips 7, each with its reason written next to it in
-[`bootstrap/main.tf`](bootstrap/main.tf), and passes all 224 checks on the GitHub workflows.
+Checkov passes 33 checks on the Terraform. It skips 16, each with its reason written next to it in
+[`bootstrap/`](bootstrap), and passes all 260 checks on the GitHub workflows.
 
 Run everything locally:
 
@@ -206,9 +242,7 @@ The script shows each plan and waits for you to type `yes`. It:
 After that, every change is a pull request: the plan shows in the pull request, and merging applies it.
 A nightly plan fails if anyone changed the managed policies or management groups outside the pipeline.
 
-**Cost.** Management groups and Azure Policy are free. State storage is a few cents a month. The audit
-log's daily cap of 0.05 GB keeps even a runaway month to a few dollars, and normal use is a tiny fraction
-of that.
+**Cost.** Management groups, Azure Policy, budgets, anomaly alerts and 90 days of activity log are free. State storage and cost exports are a few cents a month. The audit log's daily cap of 0.05 GB keeps even a runaway month to a few dollars, and normal use is a tiny fraction of that.
 
 ## Design decisions
 
@@ -227,7 +261,7 @@ of that.
 
 1. **Management groups and policy as code** ✅ built and tested offline (deployment pending)
 2. **Environment vending** ✅ built and tested offline (deployment pending)
-3. **FinOps:** budgets, cost exports and a cost dashboard by team
+3. **FinOps** ✅ built and tested offline (deployment pending)
 4. **Seed the mess:** create untagged VMs and public storage, find and fix them, and measure how long it takes
 
 ## Layout
@@ -239,6 +273,7 @@ platform/            management groups and policy: the first stack the pipeline 
 environments/        one request per vended environment
 vending/             builds every request: the second stack
 tools/vending.py     checks requests and summarises them for pull requests
+finops/              the FinOps report: export reader, idle resources, Advisor, sample data
 bootstrap/           state storage, pipeline identities, and bootstrap.sh
 tools/policy_eval.py the offline policy evaluator
 examples/            sample resources for trying the rules

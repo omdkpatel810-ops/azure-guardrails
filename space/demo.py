@@ -7,10 +7,16 @@ from __future__ import annotations
 
 import html
 import json
+import tempfile
 from dataclasses import dataclass, field
+from functools import cache
 from pathlib import Path
 from typing import Any
 
+from finops import sample
+from finops.costs import read_exports
+from finops.inventory import load_json_rows
+from finops.report import build, to_html
 from tools.policy_eval import PolicyError, Result, decide, load
 
 ROOT = Path(__file__).resolve().parent
@@ -222,3 +228,20 @@ Guardrails (root)            data residency: Canada only, everywhere below
 │   └── Online
 ├── Sandbox                  baseline, audit only
 └── Decommissioned           clean-up only"""
+
+
+@cache
+def finops_html() -> str:
+    """The FinOps report on the sample month: the same code the daily workflow runs on real exports."""
+    with tempfile.TemporaryDirectory() as folder:
+        paths = sample.write(Path(folder))
+        report = build(read_exports([paths["costs"]]), load_json_rows(paths["resources"]), load_json_rows(paths["advisor"]))
+    return to_html(
+        report,
+        title="FinOps report (sample data)",
+        note=(
+            "Made-up data in Azure's export format: the five pretend teams' environments, the platform, and a "
+            "forgotten proof of concept with no tags. Once Guardrails runs in Azure, a daily workflow builds this "
+            "same report from the real cost export, Resource Graph and Azure Advisor."
+        ),
+    )

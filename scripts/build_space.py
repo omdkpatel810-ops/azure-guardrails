@@ -19,7 +19,7 @@ FILES = {
     "tools/__init__.py": "tools/__init__.py",
     "tools/policy_eval.py": "tools/policy_eval.py",
 }
-FOLDERS = {"policies": "*.json", "examples": "*.json"}
+FOLDERS = {"policies": "*.json", "examples": "*.json", "environments": "*.json", "finops": "*.py"}
 
 
 def build(out: Path) -> list[str]:

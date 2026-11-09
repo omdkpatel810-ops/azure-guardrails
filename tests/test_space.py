@@ -229,3 +229,10 @@ def test_storage_over_plain_http_with_modern_tls():
 
 def test_the_build_can_start_from_nothing(tmp_path):
     assert "app.py" in build(tmp_path / "new" / "space")
+
+
+def test_the_finops_tab_shows_the_sample_month():
+    page = demo.finops_html()
+    assert "FinOps report (sample data)" in page and "Made-up data" in page
+    assert "rg-data-dev" in page and "Over budget" in page
+    assert demo.finops_html() is page  # built once
